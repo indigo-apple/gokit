@@ -53,6 +53,9 @@ go get github.com/zhangwenxing/gokit
 | 包 | 职责 | 覆盖率 |
 |---|---|---|
 | `xlock` | **进程内唯一资源锁**：`KeyedLocker`（按 key 精确互斥）/ `ShardedLocker`（固定分片）/ `ReentrantLocker`（可重入）/ `ResourcePool`（N 并发闸门） | 94% |
+| `xdistlock` | **分布式锁**：统一接口 + 看门狗续约 + 安全释放（CAS）+ fencing token + 重试退避 | 90% |
+| `xdistlock/memory` | 进程内参考实现（含公平 FIFO 队列与可注入时钟）—— ★ 仅单进程有效 | 93% |
+| `xdistlock/redis` | Redis 实现（**自带极简 RESP2 客户端，零第三方依赖**）+ Lua 原子脚本 | 86% |
 
 ### 测试工具
 
@@ -67,7 +70,8 @@ go get github.com/zhangwenxing/gokit
                               │
   xerr ──────────────────────> xtype
        ├─> xcontainer ──> xstack / xqueue
-       └─> xlock
+       ├─> xlock
+       └─> xdistlock ──> xdistlock/{memory,redis}
   xsafe                        │
   xcontext                 xreflect ──> xmap ──> xconv
   xtime ───────────────────────┘        ↑        ↑
@@ -98,7 +102,10 @@ import (
 
 	"github.com/zhangwenxing/gokit/xcontainer"
 	"github.com/zhangwenxing/gokit/xcontainer/xqueue"
+	xdistlock "github.com/zhangwenxing/gokit/xdistlock"
+	xredis "github.com/zhangwenxing/gokit/xdistlock/redis"
 	"github.com/zhangwenxing/gokit/xconv"
+	"github.com/zhangwenxing/gokit/xlock"
 	"github.com/zhangwenxing/gokit/xnum"
 	"github.com/zhangwenxing/gokit/xslice"
 	"github.com/zhangwenxing/gokit/xstack"
@@ -156,6 +163,26 @@ func main() {
 	// ── 并发闸门：同一次最多 8 个外部请求 ──
 	pool := xlock.NewResourcePool(8, xlock.WithPoolName("upstream"))
 	if err := pool.With(ctx, func() error { return callUpstream() }); err != nil {
+		fmt.Println(err)
+	}
+
+	// ── 分布式锁（多机部署时用这个，而不是 xlock）──
+	be := xredis.New("127.0.0.1:6379", xredis.WithKeyPrefix("mes:"))
+	dl := xdistlock.New(be,
+		xdistlock.WithDefaultTTL(15*time.Second),
+		xdistlock.WithDefaultAutoRenew(true), // ★ 长任务必须开看门狗
+	)
+	defer dl.Close()
+
+	lock, err := dl.Lock(ctx, "order:123")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// ★ 把 fencing token 交给受保护资源校验（只发不校验 == 没做）
+	fencing := lock.FencingToken()
+	_ = writeWithFencing(ctx, "order:123", fencing)
+	if err := lock.Unlock(ctx); err != nil {
 		fmt.Println(err)
 	}
 }
@@ -220,6 +247,8 @@ make ci            # check + cross-build + fuzz-all
   | `xcontainer/xstack` | `FuzzStackLIFO` / `FuzzBoundedStackConservation` | LIFO 顺序、元素守恒 |
   | `xcontainer/xqueue` | `FuzzSliceQueueFIFO` / `FuzzRingCapacityAndFIFO` / `FuzzBoundedDropPolicies` | FIFO 顺序、容量上限、绕环、溢出策略 |
   | `xlock` | `FuzzLockCtxNoLeak` / `FuzzLockAllKeys` / `FuzzShardOf` | 任意超时下不泄漏锁与条目、多 key 加锁去重排序、分片值域 |
+  | `xdistlock` | `FuzzLockLifecycleNoLeak` / `FuzzTryLockEitherOr` | 任意租约/超时/看门狗组合下不泄漏锁，TryLock 二值语义 |
+  | `xdistlock/memory` | `FuzzMemoryTokenSafety` | 不抢锁、不误删、fencing 单调 |
 
 - 覆盖率门禁：总分 ≥ 85%、有语句的包 ≥ 75%（`scripts/cover-gate.sh`，阈值可用 `TOTAL_MIN` / `PKG_MIN` 覆盖）
 - CI：`.github/workflows/ci.yml` 含门禁 / 跨平台 / fuzz / 可选 golangci-lint 四个作业；

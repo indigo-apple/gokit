@@ -7,7 +7,14 @@
 
 ### 计划中（后续阶段）
 
-- `xdistlock` —— 分布式锁：接口抽象 + memory/redis/etcd 实现 + 看门狗续约 + fencing token
+- `xdistlock/etcd` —— 基于 etcd Lease + Txn 的实现（强一致、revision 天然单调、天然公平）。
+  **未在本阶段实现**：etcd 官方客户端是强依赖（gRPC 全家桶），
+  与本工具链「核心包零第三方依赖」目标冲突；如需要请参考 `xdistlock/redis` 的写法
+  仅实现 3 个原语（Acquire/Refresh/Release）。
+- `xdistlock` 的 **Redlock**（多节点 quorum）：设计文档明确标注「对时钟敏感、争议大、
+  默认关闭」，且必须有多节点真实环境才能验证；在拿到可复现的多节点集成测试之前**不实现**，
+  以免交付一个未经充分验证的脑裂防护。防脑裂请使用 fencing token + 资源侧校验。
+- `xdistlock` 的 **公平锁**：仅 memory 后端支持；Redis 需 sorted set / Redlock 变种，不做。
 - `xevent` —— 进程内消息订阅/事件总线：主题通配、同步/异步分发、背压、死信、按 key 保序
 - `xkeyed` —— 同 key 串行化管道（MapPipe）：按 key 路由到独立管道，保证同 key 顺序
 - `xpipe` —— 流式管道：source → stage → sink，支持中间件、并发 stage、背压与优雅关闭
@@ -15,6 +22,72 @@
 - `xconcurrency` —— Future、WorkerPool、Semaphore、限流器、熔断器、重试退避、Debounce/Throttle、Batcher
 - `xlog` / `xconfig` / `xid` / `xcodec` / `xcrypto` / `xfile` / `xnet` / `xvalidate`
 - `xcontainer` 后续子包：`xset`（集合）、`xlru`（LRU/LFU）、`xring`（环形缓冲）、`xbit`（位集合）、`xheap`（优先队列）
+
+---
+
+## [0.9.0] - Stage 9：分布式锁（xdistlock）
+
+### 新增
+
+- **`xdistlock`** —— 分布式锁的统一抽象与**通用机制**（零第三方依赖）：
+
+  > 设计判断：分布式锁真正难的不是存储命令，而是**通用机制** ——
+  > 租约续约、丢锁检测、安全释放、重试退避、fencing token。
+  > 把这些写进各实现里必然出现 N 套实现与 N 套 bug。
+  > 因此把存储压缩成 3 个原语（`Backend`），机制在客户端侧统一实现、
+  > 由同一套契约测试覆盖。
+
+  | 能力 | 说明 |
+  |---|---|
+  | `Locker` 接口 | `Lock`（阻塞）/ `TryLock`（一次）/ `Close` |
+  | `Lock` 句柄 | `Key` / `Token` / `FencingToken` / `Expiry` / `TTL` / `IsHeld` / `Unlock` / `Refresh` / `Extend` |
+  | **看门狗** | `WithAutoRenew`：按租约 1/3 周期续约；失败分「基础设施错误（继续重试）」与「锁已不属于我（判定丢锁）」 |
+  | **安全释放** | 永远 compare-and-delete；锁已丢失时 `Unlock` 返回 `ErrLockLost` 且**绝不触碰后端** |
+  | **fencing token** | 由后端发放、严格单调；文档明确「只发不校验 == 没做」 |
+  | 重试策略 | `WithRetry`（含 50%~100% 抖动防惊群）/ `WithWaitTimeout` / `WithAttemptTimeout` / `WithBlocking` |
+  | 观测 | `Metrics`（尝试/成功/等待时长/续约/丢锁/持有峰值）、`WithOnEvent`、`WithOnAcquired`、**`WithOnLost`** |
+  | 排障 | `Snapshot(ctx, prefix)`（需后端实现 `Snapshotter`） |
+
+- **`xdistlock/memory`** —— 进程内参考实现（★ 仅单进程有效，包注释含醒目警告）：
+  完整实现安全释放、fencing、**公平 FIFO 队列**（`WithFair(true)`）、可注入时钟
+  （`WithClock`，用于确定性地测试租约过期），并作为 `Backend` 语义的规范范例。
+- **`xdistlock/redis`** —— Redis 实现，**自带极简 RESP2 客户端**（仅标准库），
+  因此仍然零第三方依赖：
+  - 加锁 = 一个 Lua 脚本内原子完成 `INCR`（分配 fencing）+ `SET NX PX`，单 RTT；
+  - 释放 = Lua `GET == token` 才 `DEL`；续约 = Lua `GET == token` 才 `PEXPIRE`；
+  - 连接池复用 + 协议错误自动丢弃坏连接 + `MOVED/ASK` 明确报 `ErrClusterNotSupported`；
+  - `PoolStats` / `KeyFor` 便于排障。
+  - 边界：**仅单节点**（含主从/哨兵代理），无 cluster、无 pipeline、无 pub/sub。
+- **测试**：除常规契约测试外，`xdistlock/redis` 用**脚本化假 Redis 服务端**验证
+  RESP 解析的每个分支（含各种畸形响应），并用**真实 Redis 集成测试**（自动探测
+  6382/6379，可用 `GOKIT_REDIS_ADDR` 指定）验证 Lua 脚本语义、安全释放与并发互斥。
+- 模糊测试：`FuzzLockLifecycleNoLeak`（任意租约/超时/看门狗组合不泄漏）、
+  `FuzzTryLockEitherOr`、`FuzzMemoryTokenSafety`（模型式：不抢锁 / 不误删 / fencing 单调）。
+- 公平模式的安全性质用**有界确定性压力测试**（`TestFairSafetyStress`）验证，而非 fuzz：
+  每次「锁被持有」的 AcquireFair 都要等到 ctx 超时才返回，单次执行代价与输入长度线性相关
+  （几千字节的输入要跑上百秒），且「交接 vs ctx 到期」的随机性会让 fuzz 变成 flaky 来源。
+  这里改用有限循环 + 3ms 超时，性质覆盖不变、耗时确定为 0.6s。
+
+### 修复（本阶段开发过程中发现并修复的缺陷）
+
+- **`Snapshot` 死循环风险**：SCAN 游标用宽松转换接受了整数响应，
+  一个返回整型游标的畸形成功响应会让游标永不推进 → 无限循环。
+  改为游标**只接受 bulk**，并加「轮数上限 + 游标必须推进」双重终止保护。
+- **`Snapshot` 把 fencing 计数器当成锁**：计数器 key 与锁 key 同前缀，
+  被当成「永不释放的锁」列出（负 TTL）。已在扫描结果中显式排除。
+- **memory 后端把已过期的租约仍算作「持有中」**：`Snapshot` 会列出负 TTL 的僵尸锁，
+  `ActiveKeys` 也会把过期锁计入，与 Redis 的自动过期语义不一致。
+  新增 `heldLocked`（token 匹配 **且** 未过期）统一过滤。
+- **`AcquireFair` 的「授予 vs ctx 到期」竞态**：两者同时就绪时 `select` 随机选择；
+  现在优先判定「是否已被交接」，避免白白浪费一次已到手的获取机会。
+- **`conn.do` 的 socket deadline 泄漏风险**：`normCtx` 曾包一层 `WithTimeout` 却不调用
+  `cancel`（timer 泄漏），而 `conn.do` 本身已用配置的 `ioTimeout` 作为兜底 deadline，
+  该包装是多余的，已删除。
+
+### 工程
+
+- `Makefile` 的 `fuzz-all` 目标扩到 22 个 fuzz target。
+- README 增补分布式锁的推荐用法（含「必须开看门狗」「必须校验 fencing token」两条硬要求）。
 
 ---
 
