@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GOTOOLCHAIN: local
+  GOFLAGS: -mod=mod
+
+jobs:
+  # ── 1) 质量门禁：格式 / vet / race 测试 / 覆盖率 ──
+  gate:
+    name: 质量门禁 (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.21', '1.22']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: 校验零第三方依赖
+        run: |
+          if grep -qE '^\s*require' go.mod; then
+            echo "!! 核心包必须保持零第三方依赖，go.mod 不允许出现 require"
+            cat go.mod
+            exit 1
+          fi
+          echo "零依赖校验通过"
+
+      - name: gofmt 检查
+        run: make fmt-check
+
+      - name: go vet
+        run: make vet
+
+      - name: 测试（-race）
+        run: make test
+
+      - name: 覆盖率门禁
+        run: make cover-check
+
+      - name: 上传覆盖率产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.go }}
+          path: cover.out
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ── 2) 跨平台编译校验 ──
+  cross-build:
+    name: 跨平台编译
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+      - run: make cross-build
+
+  # ── 3) 模糊测试（短时回归，避免占用 CI 太久）──
+  fuzz:
+    name: 模糊测试回归
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+      - name: 全量 fuzz（每目标 10s）
+        run: make fuzz-all FUZZTIME=10s
+      - name: 上传失败语料
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ── 4) 可选：golangci-lint（非阻塞）──
+  lint-extra:
+    name: golangci-lint（可选，非阻塞）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m

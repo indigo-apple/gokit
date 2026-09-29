@@ -1,0 +1,81 @@
+# golangci-lint 配置（可选）
+#
+# gokit 的核心包零第三方依赖，因此**不强制**使用 golangci-lint：
+# `make lint` 只用标准库的 gofmt + go vet。
+# 若你本地/CI 想更严格，可直接使用本配置：
+#
+#   golangci-lint run
+#
+# 注意：本配置保持保守，避免与「零依赖 + Go 1.21 基线」的设计冲突。
+
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - testdata
+
+linters:
+  disable-all: true
+  enable:
+    # 默认集
+    - errcheck      # 未处理的 error
+    - gosimple      # 可简化的写法
+    - govet         # 标准 vet
+    - ineffassign   # 无效赋值
+    - staticcheck   # 静态分析
+    - unused        # 未使用的标识符
+    # 质量增强
+    - bodyclose     # 响应体未关闭
+    - copyloopvar   # 循环变量捕获（Go 1.22+ 语义相关，保留提示）
+    - errorlint     # 错误比较应使用 errors.Is/As
+    - gocritic      # 常见代码缺陷
+    - misspell      # 拼写
+    - nilerr        # 返回 nil 但 err 非空
+    - prealloc      # 可预分配的切片
+    - revive        # 风格检查（替代 golint）
+    - unconvert     # 多余类型转换
+    - unparam       # 未使用的函数参数
+    - whitespace    # 多余空白
+    - gofmt         # 格式化
+    - goimports     # import 分组
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+    # 测试文件中允许忽略部分返回值
+    exclude-functions:
+      - (io.Closer).Close
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - hugeParam            # 泛型容器按值传参是刻意选择
+      - rangeValCopy         # 同上
+  revive:
+    rules:
+      - name: exported
+        disabled: false       # 本项目要求导出符号有中文 godoc
+      - name: var-naming
+      - name: package-comments
+        disabled: false       # 每个包必须有包注释
+  misspell:
+    locale: US
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    # 测试文件中允许较宽松的写法
+    - path: _test\.go
+      linters:
+        - errcheck
+        - unparam
+        - gocritic
+        - prealloc
+    # 示例代码
+    - path: examples/
+      linters:
+        - errcheck
+        - revive
