@@ -1,36 +1,15 @@
 package xreflect
 
 import (
+	"encoding/json"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/zhangwenxing/gokit/xerr"
+	"github.com/zhangwenxing/gokit/xtime"
 )
-
-// CommonTimeLayouts 是弱类型赋值时**按顺序尝试**的常见时间布局。
-//
-// xconv / xtime 复用同一份列表，保证全工具链的时间解析行为一致。
-var CommonTimeLayouts = []string{
-	time.RFC3339Nano,
-	time.RFC3339,
-	"2006-01-02T15:04:05",
-	"2006-01-02 15:04:05.999999999",
-	"2006-01-02 15:04:05",
-	"2006-01-02",
-	"2006/01/02 15:04:05",
-	"2006/01/02",
-	"2006-1-2 15:04:05",
-	"2006-1-2",
-	"20060102150405",
-	"20060102",
-	time.RFC1123Z,
-	time.RFC1123,
-	time.RFC822Z,
-	time.ANSIC,
-	time.UnixDate,
-}
 
 // ---------------------------------------------------------------------------
 // Assign
@@ -45,7 +24,8 @@ var CommonTimeLayouts = []string{
 //   - 源为指针 / 接口：自动解引用（nil 则写入零值）
 //   - string ↔ 数值 ↔ bool：双向转换（字符串空串视为零值，无法解析时报错）
 //   - []byte ← string
-//   - 切片 / 数组：逐元素递归赋值（长度不同时报错）
+//   - 切片 / 数组 ← 切片 / 数组：逐元素递归赋值（长度不同时报错）
+//   - 切片 ← string：按逗号切分（去空白、丢空段），适配 env / 表单 / CSV 场景
 //   - map：逐键值递归赋值；string 键的 map 也可由 struct 转换而来
 //   - 结构体 ← 结构体：按字段名（其次 json tag 名）匹配
 //   - 结构体 ← map：按 json tag 名（其次 Go 字段名）匹配
@@ -212,6 +192,19 @@ func assignValue(dst, src reflect.Value) error {
 // ---------------------------------------------------------------------------
 
 func toStr(src reflect.Value) (string, bool) {
+	// 时间与时长必须先特判：它们的底层 Kind 分别是 struct / int64，
+	// 否则 time.Duration 会被格式化成纳秒整数（"90000000000"）而不是 "1m30s"。
+	if src.Type() == durationType && src.CanInterface() {
+		if d, ok := src.Interface().(time.Duration); ok {
+			return d.String(), true
+		}
+	}
+	if src.Type() == timeType && src.CanInterface() {
+		if t, ok := src.Interface().(time.Time); ok {
+			return t.Format(time.RFC3339Nano), true
+		}
+	}
+
 	switch src.Kind() {
 	case reflect.String:
 		return src.String(), true
@@ -401,6 +394,25 @@ func assignSlice(dst, src reflect.Value) error {
 	}
 
 	if src.Kind() != reflect.Slice && src.Kind() != reflect.Array {
+		// string → 切片：按逗号切分并去空白 / 丢空段。
+		// 这是 env 变量、表单、CSV 单元格写切片的通用约定。
+		if src.Kind() == reflect.String {
+			parts := strings.Split(src.String(), ",")
+			out := reflect.MakeSlice(dst.Type(), 0, len(parts))
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p == "" {
+					continue
+				}
+				elem := reflect.New(dst.Type().Elem()).Elem()
+				if err := assignValue(elem, reflect.ValueOf(p)); err != nil {
+					return err
+				}
+				out = reflect.Append(out, elem)
+			}
+			dst.Set(out)
+			return nil
+		}
 		return typeErr(src, dst)
 	}
 	out := reflect.MakeSlice(dst.Type(), src.Len(), src.Len())
@@ -542,14 +554,14 @@ func assignTime(dst, src reflect.Value) error {
 			dst.SetZero()
 			return nil
 		}
-		for _, layout := range CommonTimeLayouts {
+		for _, layout := range xtime.Layouts {
 			if t, err := time.Parse(layout, s); err == nil {
 				dst.Set(reflect.ValueOf(t))
 				return nil
 			}
 		}
 		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-			dst.Set(reflect.ValueOf(unixToTime(n)))
+			dst.Set(reflect.ValueOf(xtime.AutoFromTimestamp(n)))
 			return nil
 		}
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
@@ -574,20 +586,10 @@ func assignTime(dst, src reflect.Value) error {
 }
 
 // unixToTime 按数值量级自动识别秒 / 毫秒 / 微秒 / 纳秒。
-func unixToTime(n int64) time.Time {
-	switch {
-	case n == 0:
-		return time.Time{}
-	case n > 1e17: // 纳秒
-		return time.Unix(0, n)
-	case n > 1e14: // 微秒
-		return time.Unix(0, n*1e3)
-	case n > 1e11: // 毫秒
-		return time.Unix(0, n*1e6)
-	default: // 秒
-		return time.Unix(n, 0)
-	}
-}
+//
+// 复用 xtime.AutoFromTimestamp，保证 xreflect / xconv / xtime 的
+// 时间戳识别行为完全一致（单一实现来源）。
+func unixToTime(n int64) time.Time { return xtime.AutoFromTimestamp(n) }
 
 func unixFloatToTime(f float64) time.Time {
 	return unixToTime(int64(f))
@@ -753,7 +755,10 @@ func StructToMap(v any, opts ...MapOption) (map[string]any, error) {
 	return out, nil
 }
 
-// StructToMapString 把结构体转为 map[string]string（值走字符串化）。
+// StructToMapString 把结构体转为 map[string]string。
+//
+// 标量走字符串化；切片 / map / 嵌套结构体用 JSON 表达（如 `["x","y"]`）；
+// 完全无法表达的字段（chan / func 等）会被跳过。
 func StructToMapString(v any, opts ...MapOption) (map[string]string, error) {
 	m, err := StructToMap(v, opts...)
 	if err != nil {
@@ -765,12 +770,15 @@ func StructToMapString(v any, opts ...MapOption) (map[string]string, error) {
 			out[k] = ""
 			continue
 		}
-		s, ok := toStr(reflect.ValueOf(val))
-		if !ok {
-			return nil, xerr.NewfC(xerr.CodeInvalidParam,
-				"xreflect: cannot stringify field %q of type %s", k, TypeName(val))
+		if s, ok := toStr(reflect.ValueOf(val)); ok {
+			out[k] = s
+			continue
 		}
-		out[k] = s
+		b, jerr := json.Marshal(val)
+		if jerr != nil {
+			continue // chan / func 等无法表达，跳过
+		}
+		out[k] = string(b)
 	}
 	return out, nil
 }
