@@ -57,6 +57,12 @@ go get github.com/zhangwenxing/gokit
 | `xdistlock/memory` | 进程内参考实现（含公平 FIFO 队列与可注入时钟）—— ★ 仅单进程有效 | 93% |
 | `xdistlock/redis` | Redis 实现（**自带极简 RESP2 客户端，零第三方依赖**）+ Lua 原子脚本 | 86% |
 
+### 流式管道
+
+| 包 | 职责 | 覆盖率 |
+|---|---|---|
+| `xpipe` | **流式管道**（Source → Stage → Sink 惰性链）：`Map`/`FlatMap`/`Filter`/`Distinct`/`Scan` 等变换、`Batch`/`Window`/`Throttle` 批窗限速、`Parallel`/`ParallelOrdered` 并行、错误策略（FailFast/Skip/Collect）+ 重试 + **panic 隔离**、20+ 终结操作、`Broadcast`/`FanOutTo`/`SplitTo`/`Merge`/`Chain`/`Zip` | 86% |
+
 ### 消息与顺序
 
 | 包 | 职责 | 覆盖率 |
@@ -75,7 +81,7 @@ go get github.com/zhangwenxing/gokit
 ```
                          xconstraints
                               │
-  xerr ──────────────────────> xtype
+  xerr ──────────────────────> xtype  xpipe（独立：只依赖 xerr/xmap）
        ├─> xcontainer ──> xstack / xqueue
        │        └─> xkeyed ──> xevent
        ├─> xlock
@@ -93,6 +99,9 @@ go get github.com/zhangwenxing/gokit
 - `xreflect.Assign` 是**全工具链唯一的弱类型转换底座**，`xconv` 与 `xmap` 都建立在它之上。
 - `xtime.Layouts` 是**唯一的时间布局嗅探列表**，`xreflect` 复用同一份，
   保证 `MapToStruct` 与 `xtime.Parse` 对同一字符串解析结果一致。
+- `xpipe` 刻意采用**拉取式**（pull）而非设计稿的推送式（push）管道：除 `Parallel`/`Buffer`/`FromFunc`
+  外全程单 goroutine，**goroutine 泄漏与 close 竞态在结构上不存在**；代价是阶段间不自动流水线化，
+  需要重叠时显式加 `Buffer(n)` 或 `Parallel(n)`。
 - `xevent` 的「按 key 保序」直接复用 `xkeyed`（`WithKey` / 全局有序都走同一条分片管道），
   因此工具链里**只有一套按 key 串行实现**，不会出现两处语义漂移。
 - `xlock` 的所有实现共用同一个「可取消读写锁内核」（`entry`），

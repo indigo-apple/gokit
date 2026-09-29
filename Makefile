@@ -34,7 +34,11 @@ FUZZTARGETS := \
 	xkeyed:FuzzShardOf \
 	xkeyed:FuzzKeyedSerialOrder \
 	xevent:FuzzMatchNoPanic \
-	xevent:FuzzValidatePatternConsistency
+	xevent:FuzzValidatePatternConsistency \
+	xpipe:FuzzPipelineMatchesModel \
+	xpipe:FuzzWindowMatchesModel \
+	xpipe:FuzzParallelOrder_OrderAndConservation \
+	xpipe:FuzzBatchConservation
 
 .DEFAULT_GOAL := help
 .PHONY: help build vet fmt fmt-check lint test test-short race cover cover-html \

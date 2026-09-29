@@ -1,5 +1,97 @@
 # 更新日志
 
+## [0.12.0] - 2026-09-29
+
+### 新增：`xpipe` —— 流式管道（Source → Stage → Sink）
+
+对应需求「pipe」。零第三方依赖（只复用 `xerr` / `xmap`）。
+
+**架构决策：拉取式（pull）而非设计稿的推送式（push）**
+
+设计文档描述的是「每个阶段一条 channel + 一个 goroutine」。本实现刻意改为拉取式：
+`Pipe` 只是「源 + 阶段链」的描述，终结操作顺链向下 `next()` 拉取。
+
+- ✅ **goroutine 泄漏在结构上不可能** —— 除 `Parallel`/`Buffer`/`FromFunc` 外全程单 goroutine；
+- ✅ **没有 close 竞态** —— 不需要在多处 close channel，也就不会出现 send on closed channel、
+  重复 close、关掉后仍有人读等一整类并发缺陷；
+- ✅ **取消极其简单** —— 每次拉取前检查 ctx，设计文档不变量 #2「绝不裸读 channel」默认成立；
+- ⚠️ 代价：阶段之间**不会自动流水线化**，需要重叠时显式加 `Buffer(n)`（预取）或 `Parallel(n)`。
+
+**API 风格**：Go 的方法不能自带类型参数，因此 `p.Map(fn)` 这种链式写法无法编译，
+统一采用**包级泛型函数**：`xpipe.Map(src, fn)`、`xpipe.Filter(p, pred)`、`xpipe.Collect(p)`。
+
+**数据源**：`FromSlice` / `Just` / `Empty` / `Generate` / `Range`（半开区间）/ `FromChannel` /
+`FromChannelCtx` / `FromFunc`（推送式适配）/ `FromReader` / `FromLines` / `Strings`。
+
+**变换**：`Map` / `MapErr` / `MapCtx` / `Filter` / `FilterCtx` / `Reject` / `FlatMap` /
+`Distinct` / `DistinctBy` / `Peek` / `Scan`。
+
+**批处理与节奏**：`Batch`（+`WithBatchTimeout`）/ `Window(size, step)` / `Throttle`。
+
+**并发**：`Parallel`（无序）/ `ParallelOrdered`（按序重排）/ `Buffer`（预取流水线化）。
+
+**错误处理**：`ErrorPolicy`（`PolicyFailFast` 默认 / `PolicySkip` / `PolicyCollect`）、
+`WithRetry`（指数退避 + 抖动）、`OnError`（把上游错误转成「跳过继续」）、
+**每个阶段的用户函数都有 panic 兜底**（panic → error → 走策略，绝不带崩进程）。
+
+**终结操作**：`Drain` / `ForEach` / `Collect` / `ToSlice` / `CollectN` / `Reduce` / `Count` /
+`First` / `Last` / `Any` / `All` / `GroupBy` / `GroupByCount` / `ToMap`（+merge）/ `SortedKeys`。
+
+**扇出汇聚**：`Broadcast`（广播）/ `FanOutTo`（轮询分发）/ `SplitTo`（按谓词分流）/
+`Merge`（并发 fan-in）/ `Chain`（顺序串联）/ `Zip`（按位配对）。
+
+**生命周期**：`Close`（幂等）/ `Err` / `ErrAll` / `IsClosed` / `Ctx` / `WithContext` /
+`Named`，以及 `Pipe.Name()`。
+
+### 概念澄清（与设计稿的三处刻意偏离）
+
+1. **没有独立 `Retry` 阶段**：拉取式管道里「重试某个位置」语义含糊（重试上游 pull 要么重复消费、
+   要么已推进到下一个元素）。重试属于「会失败的那个操作」，因此改为阶段选项
+   `MapErr(p, fn, WithRetry(3, 10*time.Millisecond))`。
+2. **没有 `Tee`/`FanOut`/`SplitBy` 返回多条 `*Pipe`**：拉取式管道只能消费一次，把一条流复制成
+   n 条必须缓存整个流（内存无界）。改用回调形式的终结操作 `Broadcast`/`FanOutTo`/`SplitTo`，
+   在**常量内存**下完成同样的分发。
+3. **策略常量加前缀**：Go 没有命名空间，而终结操作 `xpipe.Collect` 已占用 `Collect`，
+   因此策略常量统一为 `PolicyFailFast` / `PolicySkip` / `PolicyCollect`。
+
+### 不变量（全部有测试或 fuzz 覆盖）
+
+1. 一个 `Pipe` 只能被终结一次（重复终结返回 `ErrConsumed`）；
+2. 终结操作返回时，内部创建的 goroutine **保证已退出**（`TestNoGoroutineLeak` 11 个子用例
+   覆盖正常消费 / 提前收工 / 中途出错 / 取消等路径）；
+3. 无论配置如何，`Chain` 顺序确定、`Merge` 顺序不确定 —— 名字刻意区分，避免「以为有序其实无序」；
+4. 所有用户回调的 panic 都被隔离成 error 并按策略处理（`panic(error)` 保留 `errors.Is` 语义）。
+
+### 修复（写测试与 fuzz 时发现的真实缺陷）
+
+1. **错误被静默吞掉（最严重）**：`callGuard` 写成 `err = guard(func(){ out, err = fn(v) })`，
+   而 `guard` 只返回「panic 转换出来的错误」—— 于是**函数正常返回的 error 被覆盖成 nil**。
+   症状：`MapErr` 失败的元素产出零值继续跑、默认 FailFast 完全失效、重试永不触发、
+   `Merge` 不上报上游错误。修复：`callGuard` 先判 panic 再透出原错误，并把
+   `guard` 的语义边界写进注释（**这是本包最值得警惕的一个坑**）。
+2. **`filterNext` 把「跳过」当成「流结束」**：`Skip` 策略下谓词出错会直接截断整条流
+   （`FilterCtx Skip = [0]`）。修复：改用 `fail2`（需继续时 `continue`）。
+3. **`Window` 步长大于窗口时漏跳元素**：`step > size` 时只清空缓冲，没在上游跳过差额，
+   于是本该跳过的元素被拼进下一窗（`Window(Range(1,9), 2, 3)` 输出 4 个窗而非 3 个）。
+4. **`Merge` 被任一上游的结束截断**：上游 `more=false` 的标记被透传成「整条流结束」，
+   导致只输出了最后一个源的元素。修复：上游结束**不发结束标记**，靠所有 pump 退出后 `close(ch)`。
+5. **`WithContext` 无法传播**：阶段在构造时把 ctx 捕获进闭包，替换后新 ctx 对已建阶段无效
+   （`WithRetry(100, time.Hour)` 的退避完全感知不到取消）。修复：引入**全链共享的 ctx 槽位**
+   （`ctxBox` + `atomic.Pointer`，历史派生 ctx 全部登记、终结时统一取消），
+   惰性阶段在**拉取时**读取当前 ctx；`WithContext` 改为就地替换。
+6. **`newSource` 忽略 `WithName`**：源名固定为 `Range`/`FromSlice`，配置里的名字被丢弃。
+7. `go vet` 抓到两处：`Named` 用 `out := *p` 复制含 `atomic.Bool` 的头部（noCopy）、
+   `Merge` 声明了未使用的变量。
+
+### 新增 fuzz
+
+`FuzzPipelineMatchesModel`（Map+Filter+Distinct+Batch 与朴素模型逐位比对）、
+`FuzzWindowMatchesModel`（含 step>size / step==size 边界）、
+`FuzzParallelOrder_OrderAndConservation`（保序模式逐位相等 + 无序模式多重集相等）、
+`FuzzBatchConservation`（批展开后与原序列逐位相等）。
+
+---
+
 ## [0.11.0] - 2026-09-29
 
 ### 新增：`xevent` —— 进程内消息订阅（事件总线）
