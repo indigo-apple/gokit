@@ -1,5 +1,103 @@
 # 更新日志
 
+## [0.11.0] - 2026-09-29
+
+### 新增：`xevent` —— 进程内消息订阅（事件总线）
+
+对应需求「消息订阅」。零第三方依赖，仅复用本工具链的 `xcontainer` / `xerr` / `xkeyed`。
+
+**事件模型**：`Event`（ID / Topic / Key / Payload / Data / Headers / Timestamp / Attempt / TraceID / Source
++ `WithHeader` 深拷贝 / `Clone` / `Header`）。事件 ID 为「时间戳36进制-进程内序号-随机4字节」三段式。
+
+**主题匹配**：精确、`*`（单级通配 / 全匹配）、`**`（多级通配 / 全匹配）、`re:` 前缀正则。
+   正则编译结果带缓存（上限 256），非法正则**降级为不匹配**而不是 panic。
+
+**投递模式**（顺序与吞吐不可兼得，必须显式选择）：
+
+| 模式 | 顺序保证 | 实现 |
+|---|---|---|
+| 默认异步 | 单订阅 FIFO（队列序） | 每订阅 1 个消费者 |
+| `WithKey(k)` | 同 key 严格串行 | 复用 `xkeyed` 分片管道 |
+| `WithOrdered(true)` | 全局严格串行 | 内部保留 key + 同一分片 |
+| `WithConcurrency(n)` | 不保证（换吞吐） | 同订阅 n 个消费者 |
+| `WithGroup(g)` | 组内只投一份（轮询），组间广播 | 发布时选组员 |
+
+`WithSync(true)` / `PublishSync`：等所有匹配订阅的 handler 返回并聚合错误（`xerr.MultiError`），
+`ErrorPolicy` 支持 `FailFast` / `Collect`。
+
+**背压**：每订阅一条有界队列 + 4 种溢出策略（`Block` 默认阻塞发布 / `DropOldest` / `DropNewest` / `Fail`）。
+`DropNewest` 静默丢弃**不报错**（语义是「宁可丢也不阻塞调用方」），`Fail` 才返回 `ErrQueueFull`。
+
+**可靠性**：`WithRetry`（指数退避 + 50%~100% 抖动，上限 5s）→ `WithDeadLetter`（死信回调）
+→ 总线级 `WithOnError` 兜底。失败事件的 `Attempt` 逐次递增。
+
+**其它能力**：中间件（`Recover` / `Timeout` / `Validate` / `Skip` / `Tap` / `Chain`）、
+`WithFilter`、`WithOnce`、`WithDelay`（延迟投递，关闭时停掉未到期定时器）、
+`WithPull`（拉模式，事件流入 `Events()`）、`WithReplayBuffer` + `Replay`（最近 N 条重放）、
+`Stats` / `Subscriptions` / `Topics` / `Subscribers`。
+
+### 修复（写测试与压测时发现的真实缺陷）
+
+1. **优雅关闭静默丢事件**：`deliver` 在「订阅 ctx 已被取消」时直接返回，导致**已出队的事件不调用 handler**
+   就被丢弃（优雅关闭、`WithOnce` 都会命中）。修复：只有**重试**才因取消而放弃，
+   首次投递必执行；排空阶段改用 `context.WithoutCancel(s.ctx)`，让已接收的事件真正处理完。
+2. **`Close(ctx)` 的超时形同虚设**：等待逻辑写在 `closeOnce.Do` 内部，`ctx` 超时检查永远执行不到，
+   Close 变成不可打断的挂起（实测挂 120s+）。修复：Once 内只做非阻塞通知，
+   阻塞等待移到后台 goroutine，调用方通过 `b.drained` + `select ctx.Done()` 真正可超时返回。
+3. **`timer.Stop()` 成功时的 WaitGroup 计数丢失**：`Stop()` 返回 true 表示回调永不执行，
+   计数只能由调用方补 `Done()`，否则 `Close` 永久阻塞在 `timerWG.Wait()` 上。已修。
+4. **`trace_id` 在带自定义头时丢失**：原实现仅在 `Headers == nil` 时注入 `trace_id`。
+   改为恒定注入（未显式设置时），并统一走「拷贝一次 + 合并」，不修改调用方传入的 map。
+5. **`WithOnce` 自等待死锁**：`Cancel()` 内含 `wg.Wait()`，被 worker 自身调用会等自己。
+   拆分为 `stop()`（非阻塞通知）/ `wg.Wait()` / `detach()`，Once 触发走 `stop + 后台 detach`。
+6. **订阅自动取消后发布误报 `ErrClosed`**：新增内部信号 `errSubStopped`，
+   语义上「订阅自己消失了」不算发布失败 → 跳过并继续；同时把「总线关闭」判定提前，保证错误类型确定。
+7. **`atomic.Value.Store(nil)` panic**：`lastErr` 改为互斥锁保护（该字段天然经常为 nil）。
+
+### 变更
+
+- `Bus` 接口在 DESIGN.md 基础上扩展：`PublishSync` / `Stats` / `Subscriptions` / `Topics` /
+  `Replay` / `ReplayCount` / `IsClosed`（设计稿把它们写在具体类型上；提升到接口后调用方无需类型断言）。
+- `Subscription` 接口补充 `QueueDepth()` / `Stats()`。
+- 总线级溢出策略选项命名为 `WithDefaultOverflow`（Go 不支持重载，且与单订阅级 `WithOverflow` 语义不同；
+  命名与 `xdistlock.WithDefaultTTL` 保持一致）。
+- 新增 fuzz：`FuzzMatchNoPanic`（任意模式不得 panic + 与标准库正则结果一致 + 幂等）、
+  `FuzzValidatePatternConsistency`。
+
+---
+
+## [0.10.0] - 2026-09-29
+
+### 新增：`xkeyed` —— 按 key 串行管道（同 key 串行 / MapPipe）
+
+对应需求「同一 key 的 mapPipe」。key 哈希到**固定分片**（默认 2*CPU，最少 8、最多 256），
+每分片一条有界队列 + 单 worker：
+
+- ✅ 同 key 必然同分片 → **严格串行**（强保证）；
+- ✅ 固定分片表 → **不会随 key 数量增长而泄漏内存**（与逐 key 建队列的实现的关键差别）；
+- ⚠️ 不同 key 可能同分片 → 偶发「假串行」（只影响吞吐，不影响正确性）。
+
+API：`New` / `Submit`（不等待）/ `Do`（同步等待）/ `DoValue[T]`（带返回值，包级泛型函数）/
+`Wait(ctx)` / `Close` / `CloseCtx(ctx)` / `Stats` / `Pending` / `Shards` / `HashKey` / `ShardOf`。
+选项：`WithShards` / `WithQueueSize` / `WithOverflow` / `WithOnError` / `WithOnPanic`。
+
+与 `xlock` 的分工：`xlock` 解决**互斥**（拿不到锁就等），`xkeyed` 解决**顺序**（不阻塞提交、无死锁风险）。
+
+### 修复
+
+1. **`Close` 与并发生产者的 send-on-closed-channel panic**：`Close` 直接关闭分片队列时，
+   仍在 select 中阻塞发送的生产者会 panic。修复：引入 `prodMu`/`prodWG` 生产者登记，
+   `Close` 的顺序变为「置标志 → 关 closeCh 唤醒阻塞的生产者 → 等生产者全部退出 → 才关队列」。
+   （与 `xqueue.Bounded` 是同一类坑，这次以同样的思路根治。）
+2. panic 保护刻意**手写**而非套用 `xsafe`：需要在 recover 时同时拿到「panic 值」与「任务 key」以便精准回调。
+
+### 新增 fuzz
+
+`FuzzShardOf`（分片结果必须在范围内 + 可复现 + `shards<=0` 安全退化）、
+`FuzzKeyedSerialOrder`（随机提交序列下：同 key 顺序一致、同 key 不并发、不丢不重、统计自洽）。
+
+---
+
 本文件记录 gokit 的阶段性变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 

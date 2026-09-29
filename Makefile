@@ -30,7 +30,11 @@ FUZZTARGETS := \
 	xlock:FuzzShardOf \
 	xdistlock:FuzzLockLifecycleNoLeak \
 	xdistlock:FuzzTryLockEitherOr \
-	xdistlock/memory:FuzzMemoryTokenSafety
+	xdistlock/memory:FuzzMemoryTokenSafety \
+	xkeyed:FuzzShardOf \
+	xkeyed:FuzzKeyedSerialOrder \
+	xevent:FuzzMatchNoPanic \
+	xevent:FuzzValidatePatternConsistency
 
 .DEFAULT_GOAL := help
 .PHONY: help build vet fmt fmt-check lint test test-short race cover cover-html \

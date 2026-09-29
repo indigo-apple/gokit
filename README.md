@@ -57,6 +57,13 @@ go get github.com/zhangwenxing/gokit
 | `xdistlock/memory` | 进程内参考实现（含公平 FIFO 队列与可注入时钟）—— ★ 仅单进程有效 | 93% |
 | `xdistlock/redis` | Redis 实现（**自带极简 RESP2 客户端，零第三方依赖**）+ Lua 原子脚本 | 86% |
 
+### 消息与顺序
+
+| 包 | 职责 | 覆盖率 |
+|---|---|---|
+| `xkeyed` | **按 key 串行管道**：同 key 严格按提交顺序串行、不同 key 并行；固定分片 → **不随 key 数量泄漏内存** | 93% |
+| `xevent` | **进程内事件总线**：主题通配（`*` / `**` / `re:`）/ 同步·异步投递 / 按 key 保序 / 背压（4 种溢出策略）/ 重试与死信 / 中间件 / 重放缓冲 / 消费组 / 拉模式 | 88% |
+
 ### 测试工具
 
 | 包 | 职责 | 覆盖率 |
@@ -70,6 +77,7 @@ go get github.com/zhangwenxing/gokit
                               │
   xerr ──────────────────────> xtype
        ├─> xcontainer ──> xstack / xqueue
+       │        └─> xkeyed ──> xevent
        ├─> xlock
        └─> xdistlock ──> xdistlock/{memory,redis}
   xsafe                        │
@@ -85,6 +93,8 @@ go get github.com/zhangwenxing/gokit
 - `xreflect.Assign` 是**全工具链唯一的弱类型转换底座**，`xconv` 与 `xmap` 都建立在它之上。
 - `xtime.Layouts` 是**唯一的时间布局嗅探列表**，`xreflect` 复用同一份，
   保证 `MapToStruct` 与 `xtime.Parse` 对同一字符串解析结果一致。
+- `xevent` 的「按 key 保序」直接复用 `xkeyed`（`WithKey` / 全局有序都走同一条分片管道），
+  因此工具链里**只有一套按 key 串行实现**，不会出现两处语义漂移。
 - `xlock` 的所有实现共用同一个「可取消读写锁内核」（`entry`），
   区别只在「key → 锁内核」的映射方式：按 key 建表并引用计数回收，或按哈希取固定分片。
   因此**不存在两套互斥实现**，两种实现的互斥语义由同一套契约测试覆盖。
