@@ -24,7 +24,10 @@ FUZZTARGETS := \
 	xcontainer/xstack:FuzzBoundedStackConservation \
 	xcontainer/xqueue:FuzzSliceQueueFIFO \
 	xcontainer/xqueue:FuzzRingCapacityAndFIFO \
-	xcontainer/xqueue:FuzzBoundedDropPolicies
+	xcontainer/xqueue:FuzzBoundedDropPolicies \
+	xlock:FuzzLockCtxNoLeak \
+	xlock:FuzzLockAllKeys \
+	xlock:FuzzShardOf
 
 .DEFAULT_GOAL := help
 .PHONY: help build vet fmt fmt-check lint test test-short race cover cover-html \

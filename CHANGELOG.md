@@ -7,7 +7,6 @@
 
 ### 计划中（后续阶段）
 
-- `xlock` —— 进程内锁：`KeyedMutex`（唯一资源锁）、分片锁、可重入锁、读写键锁
 - `xdistlock` —— 分布式锁：接口抽象 + memory/redis/etcd 实现 + 看门狗续约 + fencing token
 - `xevent` —— 进程内消息订阅/事件总线：主题通配、同步/异步分发、背压、死信、按 key 保序
 - `xkeyed` —— 同 key 串行化管道（MapPipe）：按 key 路由到独立管道，保证同 key 顺序
@@ -16,6 +15,52 @@
 - `xconcurrency` —— Future、WorkerPool、Semaphore、限流器、熔断器、重试退避、Debounce/Throttle、Batcher
 - `xlog` / `xconfig` / `xid` / `xcodec` / `xcrypto` / `xfile` / `xnet` / `xvalidate`
 - `xcontainer` 后续子包：`xset`（集合）、`xlru`（LRU/LFU）、`xring`（环形缓冲）、`xbit`（位集合）、`xheap`（优先队列）
+
+---
+
+## [0.8.0] - Stage 8：进程内唯一资源锁（xlock）
+
+### 新增
+
+- **`xlock`** —— 按 key 的唯一资源锁，四种实现共享同一套契约：
+
+  | 类型 | 语义 | 适用场景 |
+  |---|---|---|
+  | `KeyedLocker` | 每个 key 一个锁内核，引用计数归零即回收 | 通用；key 之间需严格隔离 |
+  | `ShardedLocker` | 固定 N 个锁内核，key 按 FNV-1a 哈希落分片 | key 数量巨大、访问分散；表大小恒定 |
+  | `ReentrantLocker` | 同一 owner 重复加锁不阻塞 | 无法拆分的递归/回调（有明确警告） |
+  | `ResourcePool` | 不区分 key，只限总数（信号量） | 外部接口限流、并发闸门 |
+
+  - 统一接口：`Locker`（`Lock`/`LockCtx`/`TryLock`/`RLock`/`RLockCtx`/`TryRLock`）
+  - 作用域用法：`With` / `WithR` / `WithValue[T]`（panic 也会释放锁）
+  - 多 key 加锁：`LockAll`（**去重 + 字典序排序**，从根本消除交叉死锁；失败回滚）
+  - 观测：`Stats`（等待次数/时长、持有总量与峰值、竞争次数、无效释放次数）、
+    `ActiveKeys` / `ActiveKeysSnapshot` / `EntryState`
+  - 选项：`WithMaxKeys` / `WithWaitTimeout` / `WithOnContention` / `WithContentionThreshold`
+  - 选型辅助：`HashKey`（FNV-1a，刻意不用 maphash 以保证可复现）、`ShardOf`
+- **自研可取消读写锁内核**（`entry`）：写者 FIFO 队列 + 按序交接所有权 + 读者广播，
+  实现「写者互斥 + 读者共享 + 写者优先（防写饥饿）」，
+  且 `ctx` 取消能**真正把自己从等待队列摘除**（`sync.RWMutex` 做不到，会造成 goroutine 堆积）。
+- 模糊测试：`FuzzLockCtxNoLeak`（任意超时下不泄漏锁/条目）、
+  `FuzzLockAllKeys`（多 key 加锁的去重排序不变式）、`FuzzShardOf`（分片值域与可复现性）
+
+### 修复（本阶段开发过程中发现并修复的缺陷）
+
+- **已取消的 ctx 仍会抢到锁**：`core.acquire` 原本直接走「无人竞争」快速路径，
+  导致 `LockCtx(已取消)` / `With(已取消 ctx)` 拿到了锁并执行了业务函数。
+  改为**先判 ctx 再取锁**，与 `golang.org/x/sync/semaphore` 的约定一致。
+- **`WithR` 静默忽略 ctx**：内部误用了无 ctx 的 `RLock` 而非 `RLockCtx`。
+- **nil 接收者 panic**：嵌入式 `core` 在各实现偏移量不确定，
+  改为在每个公开方法入口显式守卫（nil 时返回 `ErrNilLocker` / 零值）。
+- **`ReentrantLocker.LockFor` 错误类型不一致**：无 ctx 入口却返回 `context.DeadlineExceeded`，
+  改为与 `Lock` 一致地映射为 `ErrLockTimeout`（抽出 `lockForBlocking` 复用）。
+- 设计补充：`Locker` 接口增加 `RLockCtx`（DESIGN.md 5.10 只列了 `RLock`，
+  但「读锁等待无法取消」同样是 goroutine 堆积来源）；`ShardedLocker` 补 `EntryState` 观测能力。
+
+### 工程
+
+- `NewSharded` 返回独立类型 `*ShardedLocker`（DESIGN.md 中声明为 `*KeyedLocker`）——
+  两者语义不同（假冲突、`Stats.Keys` 含义），共用类型会掩盖差异；二者都满足 `Locker` 接口。
 
 ---
 
