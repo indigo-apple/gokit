@@ -5,9 +5,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
-	"github.com/zhangwenxing/gokit/xcontainer/xstack"
-	"github.com/zhangwenxing/gokit/xerr"
+	"github.com/indigo-apple/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer/xstack"
+	"github.com/indigo-apple/gokit/xerr"
 )
 
 func eqInts(t *testing.T, name string, got, want []int) {

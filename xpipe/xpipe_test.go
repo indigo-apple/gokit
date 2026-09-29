@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xerr"
-	"github.com/zhangwenxing/gokit/xpipe"
+	"github.com/indigo-apple/gokit/xerr"
+	"github.com/indigo-apple/gokit/xpipe"
 )
 
 // ---------------------------------------------------------------------------

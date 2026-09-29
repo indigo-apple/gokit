@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xdistlock"
+	"github.com/indigo-apple/gokit/xdistlock"
 )
 
 // 本文件是一个**极简 RESP2 客户端**。

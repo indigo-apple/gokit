@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xtest"
+	"github.com/indigo-apple/gokit/xtest"
 )
 
 // ---------------------------------------------------------------------------

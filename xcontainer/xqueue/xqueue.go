@@ -21,7 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer"
 )
 
 // ---------------------------------------------------------------------------

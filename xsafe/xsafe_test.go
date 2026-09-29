@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xsafe"
+	"github.com/indigo-apple/gokit/xsafe"
 )
 
 func capturePanic(t *testing.T) <-chan error {

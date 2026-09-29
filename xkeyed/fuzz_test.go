@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xkeyed"
+	"github.com/indigo-apple/gokit/xkeyed"
 )
 
 // FuzzShardOf 守卫分片选型：

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xmap"
-	"github.com/zhangwenxing/gokit/xslice"
+	"github.com/indigo-apple/gokit/xmap"
+	"github.com/indigo-apple/gokit/xslice"
 )
 
 func eqInts(t *testing.T, name string, got, want []int) {

@@ -359,7 +359,7 @@ func Stack(skip int) []byte {
 
 // Caller 返回调用方信息；skip=0 表示 Caller 自身的调用者。
 //
-// 返回的 fn 为完整函数名，如 "github.com/zhangwenxing/gokit/xsafe.Caller"。
+// 返回的 fn 为完整函数名，如 "github.com/indigo-apple/gokit/xsafe.Caller"。
 // 无法获取时返回空值。
 func Caller(skip int) (file string, line int, fn string) {
 	pc, f, l, ok := runtime.Caller(skip + 1)
@@ -372,7 +372,7 @@ func Caller(skip int) (file string, line int, fn string) {
 	return f, l, fn
 }
 
-// FuncName 返回调用方函数名，如 "github.com/zhangwenxing/gokit/xsafe_test.TestX"。
+// FuncName 返回调用方函数名，如 "github.com/indigo-apple/gokit/xsafe_test.TestX"。
 func FuncName() string {
 	_, _, fn := Caller(1)
 	return fn

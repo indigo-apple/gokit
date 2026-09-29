@@ -17,9 +17,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zhangwenxing/gokit/xconstraints"
-	"github.com/zhangwenxing/gokit/xerr"
-	"github.com/zhangwenxing/gokit/xreflect"
+	"github.com/indigo-apple/gokit/xconstraints"
+	"github.com/indigo-apple/gokit/xerr"
+	"github.com/indigo-apple/gokit/xreflect"
 )
 
 // Pair 表示一个键值对，是全工具链统一的「键值对」类型

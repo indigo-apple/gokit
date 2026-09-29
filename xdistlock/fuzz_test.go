@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xdistlock"
-	"github.com/zhangwenxing/gokit/xdistlock/memory"
+	"github.com/indigo-apple/gokit/xdistlock"
+	"github.com/indigo-apple/gokit/xdistlock/memory"
 )
 
 // 模糊测试：随机组合「租约 / 等待超时 / 看门狗 / 阻塞策略」，

@@ -3,7 +3,7 @@
 > 版本：v0.1（草案，用于后续开发参考）
 > Go 基线：**Go 1.21**（依赖泛型、`log/slog`、内置 `min`/`max`/`clear`、`slices`/`maps` 标准库）
 > 环境：`/opt/go_1.21/go/bin/go`（go1.21.4）
-> 模块路径（占位，落地时替换）：`github.com/zhangwenxing/gokit`
+> 模块路径（占位，落地时替换）：`github.com/indigo-apple/gokit`
 
 ---
 
@@ -79,7 +79,7 @@
 
 ```
 gokit/
-├── go.mod                      # module github.com/zhangwenxing/gokit
+├── go.mod                      # module github.com/indigo-apple/gokit
 ├── README.md
 ├── DESIGN.md                   # 本文档
 ├── CHANGELOG.md
@@ -2647,7 +2647,7 @@ type NoopMetrics struct{}      // 默认实现，零开销
 ### 7.3 go.mod 与依赖策略
 
 ```
-module github.com/zhangwenxing/gokit
+module github.com/indigo-apple/gokit
 
 go 1.21
 ```
@@ -2968,7 +2968,7 @@ testing/fstest, io/ioutil(弃用), flag, os/signal, syscall, embed
 mkdir -p ~/2T/gokit && cd ~/2T/gokit
 export PATH=/opt/go_1.21/go/bin:$PATH
 export GOTOOLCHAIN=local
-go mod init github.com/zhangwenxing/gokit
+go mod init github.com/indigo-apple/gokit
 
 # 生成 P0 包目录
 for p in xconstraints xconv xslice xmap xstr xnum xtime xtype xerr xcontext xsafe xtest; do

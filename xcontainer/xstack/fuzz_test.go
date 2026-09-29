@@ -3,8 +3,8 @@ package xstack_test
 import (
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
-	"github.com/zhangwenxing/gokit/xcontainer/xstack"
+	"github.com/indigo-apple/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer/xstack"
 )
 
 // 模型式模糊测试：被测栈与朴素参考模型（切片，末尾即栈顶）逐步比对。

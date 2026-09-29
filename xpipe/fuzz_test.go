@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xpipe"
+	"github.com/indigo-apple/gokit/xpipe"
 )
 
 // decode 把 fuzz 的 []byte 输入解码为 []int。

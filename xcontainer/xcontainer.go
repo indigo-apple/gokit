@@ -8,7 +8,7 @@
 // 并发安全：本包只有常量、接口与哨兵错误，可并发使用。
 package xcontainer
 
-import "github.com/zhangwenxing/gokit/xerr"
+import "github.com/indigo-apple/gokit/xerr"
 
 // OverflowPolicy 定义容器容量已满时的处理策略。
 //

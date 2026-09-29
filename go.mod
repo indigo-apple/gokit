@@ -1,3 +1,3 @@
-module github.com/zhangwenxing/gokit
+module github.com/indigo-apple/gokit
 
 go 1.21

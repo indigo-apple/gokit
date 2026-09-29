@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xreflect"
+	"github.com/indigo-apple/gokit/xreflect"
 )
 
 // setGet 把 src 弱类型赋值给 T，返回结果与新值。

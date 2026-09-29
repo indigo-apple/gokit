@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xerr"
+	"github.com/indigo-apple/gokit/xerr"
 )
 
 // ResourcePool 限制「同一类资源」的并发上限（信号量语义）。

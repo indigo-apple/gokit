@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
-	"github.com/zhangwenxing/gokit/xerr"
-	"github.com/zhangwenxing/gokit/xkeyed"
+	"github.com/indigo-apple/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xerr"
+	"github.com/indigo-apple/gokit/xkeyed"
 )
 
 // ---------------------------------------------------------------------------

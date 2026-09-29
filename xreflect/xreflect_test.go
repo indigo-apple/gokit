@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xreflect"
+	"github.com/indigo-apple/gokit/xreflect"
 )
 
 // ---------------------------------------------------------------------------

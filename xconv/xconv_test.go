@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xconv"
-	"github.com/zhangwenxing/gokit/xmap"
-	"github.com/zhangwenxing/gokit/xreflect"
+	"github.com/indigo-apple/gokit/xconv"
+	"github.com/indigo-apple/gokit/xmap"
+	"github.com/indigo-apple/gokit/xreflect"
 )
 
 func eqI(t *testing.T, name string, got, want int) {

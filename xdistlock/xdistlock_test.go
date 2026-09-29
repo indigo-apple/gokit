@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xdistlock"
-	"github.com/zhangwenxing/gokit/xdistlock/memory"
-	"github.com/zhangwenxing/gokit/xerr"
+	"github.com/indigo-apple/gokit/xdistlock"
+	"github.com/indigo-apple/gokit/xdistlock/memory"
+	"github.com/indigo-apple/gokit/xerr"
 )
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xstr"
+	"github.com/indigo-apple/gokit/xstr"
 )
 
 // 本文件提供测试假数据生成器。

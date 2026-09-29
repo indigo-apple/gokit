@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xconstraints"
-	"github.com/zhangwenxing/gokit/xnum"
+	"github.com/indigo-apple/gokit/xconstraints"
+	"github.com/indigo-apple/gokit/xnum"
 )
 
 // ---------------------------------------------------------------------------

@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xdistlock"
+	"github.com/indigo-apple/gokit/xdistlock"
 )
 
 // 编译期断言：必须同时满足 Backend / FairBackend / Snapshotter。

@@ -3,8 +3,8 @@ package xqueue_test
 import (
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
-	"github.com/zhangwenxing/gokit/xcontainer/xqueue"
+	"github.com/indigo-apple/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer/xqueue"
 )
 
 // 模型式模糊测试：把同一串操作同时作用于「被测实现」与「朴素参考模型」（切片），

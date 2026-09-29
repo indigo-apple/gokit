@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xerr"
+	"github.com/indigo-apple/gokit/xerr"
 )
 
 // ---------------------------------------------------------------------------

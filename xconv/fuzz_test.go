@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xconv"
+	"github.com/indigo-apple/gokit/xconv"
 )
 
 // FuzzToInt 确保所有标量转换入口对任意字符串都不 panic。

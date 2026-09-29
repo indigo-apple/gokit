@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xtype"
+	"github.com/indigo-apple/gokit/xtype"
 )
 
 // ---------------------------------------------------------------------------

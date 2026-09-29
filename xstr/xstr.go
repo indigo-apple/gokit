@@ -632,7 +632,7 @@ func MaskPhone(s string) string {
 	return digits[:2] + strings.Repeat("*", len(digits)-5) + digits[len(digits)-3:]
 }
 
-// MaskEmail 邮箱脱敏：zhangwenxing@x.com → zh*******@x.com。
+// MaskEmail 邮箱脱敏：zhangsanfeng@x.com → zh**********@x.com。
 //
 // 本地部分保留前 2 位（不足 2 位保留 1 位），域名保持原样。
 func MaskEmail(s string) string {

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/zhangwenxing/gokit/xmap"
+	"github.com/indigo-apple/gokit/xmap"
 )
 
 // ---------------------------------------------------------------------------

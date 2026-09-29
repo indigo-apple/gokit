@@ -20,7 +20,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer"
 )
 
 // ---------------------------------------------------------------------------

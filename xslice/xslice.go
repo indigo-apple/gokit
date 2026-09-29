@@ -16,9 +16,9 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/zhangwenxing/gokit/xconstraints"
-	"github.com/zhangwenxing/gokit/xmap"
-	"github.com/zhangwenxing/gokit/xreflect"
+	"github.com/indigo-apple/gokit/xconstraints"
+	"github.com/indigo-apple/gokit/xmap"
+	"github.com/indigo-apple/gokit/xreflect"
 )
 
 // ---------------------------------------------------------------------------

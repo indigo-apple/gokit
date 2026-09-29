@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xnum"
+	"github.com/indigo-apple/gokit/xnum"
 )
 
 func eqF(t *testing.T, name string, got, want float64) {

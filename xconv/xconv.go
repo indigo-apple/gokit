@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xconstraints"
-	"github.com/zhangwenxing/gokit/xerr"
-	"github.com/zhangwenxing/gokit/xmap"
-	"github.com/zhangwenxing/gokit/xnum"
-	"github.com/zhangwenxing/gokit/xreflect"
-	"github.com/zhangwenxing/gokit/xslice"
+	"github.com/indigo-apple/gokit/xconstraints"
+	"github.com/indigo-apple/gokit/xerr"
+	"github.com/indigo-apple/gokit/xmap"
+	"github.com/indigo-apple/gokit/xnum"
+	"github.com/indigo-apple/gokit/xreflect"
+	"github.com/indigo-apple/gokit/xslice"
 )
 
 // ---------------------------------------------------------------------------

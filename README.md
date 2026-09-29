@@ -11,7 +11,7 @@ Go 通用工具链 —— **泛型优先、零第三方依赖**（核心包 100%
 ## 安装
 
 ```bash
-go get github.com/zhangwenxing/gokit
+go get github.com/indigo-apple/gokit
 ```
 
 核心包无任何 `require`，不会污染你的依赖树。
@@ -119,15 +119,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
-	"github.com/zhangwenxing/gokit/xcontainer/xqueue"
-	xdistlock "github.com/zhangwenxing/gokit/xdistlock"
-	xredis "github.com/zhangwenxing/gokit/xdistlock/redis"
-	"github.com/zhangwenxing/gokit/xconv"
-	"github.com/zhangwenxing/gokit/xlock"
-	"github.com/zhangwenxing/gokit/xnum"
-	"github.com/zhangwenxing/gokit/xslice"
-	"github.com/zhangwenxing/gokit/xstack"
+	"github.com/indigo-apple/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer/xqueue"
+	xdistlock "github.com/indigo-apple/gokit/xdistlock"
+	xredis "github.com/indigo-apple/gokit/xdistlock/redis"
+	"github.com/indigo-apple/gokit/xconv"
+	"github.com/indigo-apple/gokit/xlock"
+	"github.com/indigo-apple/gokit/xnum"
+	"github.com/indigo-apple/gokit/xslice"
+	"github.com/indigo-apple/gokit/xstack"
 )
 
 func main() {

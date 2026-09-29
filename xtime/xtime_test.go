@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xtime"
+	"github.com/indigo-apple/gokit/xtime"
 )
 
 // 测试基准时刻：2024-01-03 是周三（2024-01-01 为周一）

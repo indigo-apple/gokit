@@ -3,7 +3,7 @@ package xslice_test
 import (
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xslice"
+	"github.com/indigo-apple/gokit/xslice"
 )
 
 // FuzzDedup 验证去重的三条不变式：

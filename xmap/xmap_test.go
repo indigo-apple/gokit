@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xerr"
-	"github.com/zhangwenxing/gokit/xmap"
+	"github.com/indigo-apple/gokit/xerr"
+	"github.com/indigo-apple/gokit/xmap"
 )
 
 func eqI(t *testing.T, name string, got, want int) {

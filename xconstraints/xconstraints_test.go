@@ -3,7 +3,7 @@ package xconstraints_test
 import (
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xconstraints"
+	"github.com/indigo-apple/gokit/xconstraints"
 )
 
 // 用泛型函数实际实例化每个约束，确保约束可被外部包正常使用。

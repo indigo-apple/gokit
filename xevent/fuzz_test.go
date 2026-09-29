@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xevent"
+	"github.com/indigo-apple/gokit/xevent"
 )
 
 // FuzzMatchNoPanic 守卫 Match 的健壮性：

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zhangwenxing/gokit/xstr"
+	"github.com/indigo-apple/gokit/xstr"
 )
 
 func eq(t *testing.T, name, got, want string) {
@@ -321,7 +321,7 @@ func TestMask(t *testing.T) {
 		{"MaskPhone(过短)", xstr.MaskPhone("123"), "1**"},
 		{"MaskPhone(空)", xstr.MaskPhone(""), ""},
 
-		{"MaskEmail", xstr.MaskEmail("zhangwenxing@x.com"), "zh**********@x.com"},
+		{"MaskEmail", xstr.MaskEmail("zhangsanfeng@x.com"), "zh**********@x.com"},
 		{"MaskEmail(短本地)", xstr.MaskEmail("ab@x.com"), "a*@x.com"},
 		{"MaskEmail(单词)", xstr.MaskEmail("a@x.com"), "a@x.com"},
 		{"MaskEmail(无@)", xstr.MaskEmail("noatsign"), "n*******"},

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xcontainer"
-	"github.com/zhangwenxing/gokit/xcontainer/xqueue"
-	"github.com/zhangwenxing/gokit/xerr"
+	"github.com/indigo-apple/gokit/xcontainer"
+	"github.com/indigo-apple/gokit/xcontainer/xqueue"
+	"github.com/indigo-apple/gokit/xerr"
 )
 
 func eqInts(t *testing.T, name string, got, want []int) {

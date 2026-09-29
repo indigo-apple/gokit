@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zhangwenxing/gokit/xlock"
+	"github.com/indigo-apple/gokit/xlock"
 )
 
 // 模糊测试：任意的超时/取消时机下，「获取锁」要么真的拿到锁，要么干净失败。

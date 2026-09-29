@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/zhangwenxing/gokit/xconstraints"
+	"github.com/indigo-apple/gokit/xconstraints"
 )
 
 // ---------------------------------------------------------------------------
