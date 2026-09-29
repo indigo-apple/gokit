@@ -1,0 +1,12 @@
+# 构建产物
+/cover.out
+/cover.html
+*.test
+*.out
+/bin/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+.DS_Store
