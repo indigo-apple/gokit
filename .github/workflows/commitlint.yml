@@ -1,0 +1,137 @@
+name: Commitlint
+
+# Any change in triggers needs to be reflected in the concurrency group.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - 'main'
+      - 'sprint*'
+  push:
+    branches:
+      - 'sprint*'
+      - 'main'
+
+concurrency:
+  # pull_request: 使用 PR 编号作为并发组，同一 PR 的多次更新取消旧运行
+  # push: 使用分支名称作为并发组，同一分支的多次 push 取消旧运行，只保留最新的
+  # workflow_dispatch: 使用分支名称
+  group: ${{ github.event_name == 'pull_request' && format('commitlint-pr-{0}', github.event.pull_request.number) || format('commitlint-{0}', github.ref_name) }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    runs-on: [self-hosted, Linux, X64, NanhuInsight]
+    timeout-minutes: 5
+    outputs:
+      need_node: ${{ steps.chk.outputs.need }}
+    steps:
+      - name: Check Node 20
+        id: chk
+        shell: bash
+        run: |
+          set -uo pipefail
+          want="20"
+
+          # PATH 上（镜像/系统预装）
+          major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)"
+          echo "major=$major"
+          if [ "${major:-}" = "$want" ]; then
+            echo "need=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "need=true" >> "$GITHUB_OUTPUT"
+
+  # ② 只有检测说"要装"才启动；跳过 = 不下载 setup-node
+  setup:
+    needs: detect
+    if: needs.detect.outputs.need_node == 'true'
+    runs-on: [self-hosted, Linux, X64, NanhuInsight]
+    timeout-minutes: 15
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with: { node-version: '20' }
+
+  # ③ 真正跑活：复用已装好的 node（跨 job 要自己挂回 PATH）
+  lint:
+    needs: [detect, setup]
+    if: >-
+      !cancelled()
+      && needs.detect.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.setup.result)
+    runs-on: [self-hosted, Linux, X64, NanhuInsight]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        timeout-minutes: 10
+      - name: Detect Node.js
+        id: check
+        run: |
+          if [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null)" = "20" ]; then
+            echo "installed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "installed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.installed != 'true'
+        uses: actions/setup-node@v4
+        with: { node-version: 20 }
+        timeout-minutes: 10
+
+      - name: Install commitlint
+        run: |
+          npm install --save-dev --registry=https://registry.npmmirror.com @commitlint/{config-conventional,cli}
+          # 放宽过严规则(不影响 type/scope/subject 核心校验):subject-case 关(禁大写误伤专有名词);footer-leading-blank 关(纯格式);header-max-length 100→150、body-max-line-length 100→300(给中文/长描述余量)。
+          echo "module.exports = { extends: ['@commitlint/config-conventional'], rules: { 'subject-case': [0], 'footer-leading-blank': [0], 'header-max-length': [2, 'always', 150], 'body-max-line-length': [2, 'always', 300] } }" > commitlint.config.js
+
+      - name: Determine commit range
+        id: commit-range
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # PR 事件：检查 PR 中所有非合并提交
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            
+            # 如果 base.sha 为空，使用目标分支的最新 commit
+            if [ -z "$BASE_SHA" ]; then
+              BASE_REF="${{ github.event.pull_request.base.ref }}"
+              git fetch origin $BASE_REF 2>/dev/null || true
+              BASE_SHA=$(git rev-parse origin/$BASE_REF 2>/dev/null || echo "HEAD~1")
+            fi
+          else
+            # push 事件：检查本次 push 中包含的所有新提交
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+            
+            # 如果是新分支的第一次 push，before 会是 0000...，此时从根 commit 开始检查
+            if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              echo "New branch push detected, checking all commits"
+              BASE_SHA=$(git rev-list --max-parents=0 HEAD)
+            fi
+          fi
+          
+          echo "base_sha=$BASE_SHA" >> $GITHUB_OUTPUT
+          echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
+
+      - name: Run commitlint on commits
+        run: |
+          BASE_SHA="${{ steps.commit-range.outputs.base_sha }}"
+          HEAD_SHA="${{ steps.commit-range.outputs.head_sha }}"
+          
+          echo "Checking commits from $BASE_SHA to $HEAD_SHA"
+          
+          # 获取所有非合并提交，排除合并提交（GitHub 自动创建的合并提交可能包含格式问题）
+          COMMITS=$(git rev-list --no-merges "$BASE_SHA".."$HEAD_SHA")
+          
+          if [ -z "$COMMITS" ]; then
+            echo "No non-merge commits to check"
+            exit 0
+          fi
+          
+          # 对每个非合并提交运行 commitlint
+          for commit in $COMMITS; do
+            git log --format=%B -n 1 "$commit" | npx commitlint
+          done
